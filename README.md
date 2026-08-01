@@ -12,7 +12,7 @@ A robust, TypeScript-based UART (Universal Asynchronous Receiver-Transmitter) li
 Once published to npm, you can install it via:
 
 ```bash
-npm install uart.js
+npm i @dhaval/uart.js
 ```
 
 *(Note: Currently in development. Clone the repository and run `npm install` to test locally.)*
