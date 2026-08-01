@@ -1,21 +1,22 @@
 {
-  "name": "uart.js",
+  "name": "@dhaval/uart.js",
   "version": "1.0.0",
-  "description": "",
-  "main": "src/index.js",
+  "description": "A robust, TypeScript-based UART listener module for Node.js",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "tsc",
+    "prepublishOnly": "npm run build"
   },
+  "files": [
+    "dist"
+  ],
   "repository": {
     "type": "git",
     "url": "git+https://github.com/dhaval17/uart.js.git"
   },
-  "author": "",
+  "author": "Dhaval Chauhan",
   "license": "ISC",
-  "bugs": {
-    "url": "https://github.com/dhaval17/uart.js/issues"
-  },
-  "homepage": "https://github.com/dhaval17/uart.js#readme",
   "dependencies": {
     "serialport": "^13.0.0"
   }
