@@ -15,7 +15,7 @@ Once published to npm, you can install it via:
 npm i @dhaval/uart.js
 ```
 
-*(Note: Currently in development. Clone the repository and run `npm install` to test locally.)*
+NPM Package at: https://www.npmjs.com/package/@dhaval/uart.js
 
 ## Usage
 
