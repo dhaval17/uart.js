@@ -1,0 +1,43 @@
+name: TypeScript compile check
+
+on:
+  push:
+    paths:
+      - 'src/**'
+  pull_request:
+    paths:
+      - 'src/**'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Cache npm (npm cache)
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      - name: Install dependencies or TypeScript
+        run: |
+          if [ -f package.json ]; then
+            npm ci
+          else
+            npm install -g typescript
+          fi
+
+      - name: Run TypeScript compiler (no emit)
+        run: |
+          # Use npx so that tsc is available whether installed in node_modules or globally
+          npx -y tsc --noEmit
