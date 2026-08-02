@@ -1,6 +1,6 @@
 {
   "name": "@dhaval/uart.js",
-  "version": "1.0.1-beta.0",
+  "version": "1.0.1",
   "description": "A robust, TypeScript-based UART listener module for Node.js",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

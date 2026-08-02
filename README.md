@@ -22,7 +22,7 @@ npm i @dhaval/uart.js
 Import the module and initialize it with your specific hardware path (e.g., `/dev/ttyUSB0` on Linux, `COM3` on Windows) and your desired baud rate.
 
 ```typescript
-import { UartListener } from 'uart.js';
+import { UartListener } from '@dhaval/uart.js';
 
 const uart = new UartListener({
     path: '/dev/ttyUSB0',
