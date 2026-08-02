@@ -19,7 +19,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20' # Bumped to 20 to clear deprecation warnings
 
       - name: Cache npm (npm cache)
         uses: actions/cache@v4
@@ -29,15 +29,17 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-node-
 
-      - name: Install dependencies or TypeScript
+      - name: Install dependencies and TypeScript
         run: |
           if [ -f package.json ]; then
             npm ci
+            # Explicitly install typescript to prevent npx from grabbing the deprecated 'tsc' package
+            npm install typescript --no-save 
           else
             npm install -g typescript
           fi
 
       - name: Run TypeScript compiler (no emit)
         run: |
-          # Use npx so that tsc is available whether installed in node_modules or globally
-          npx -y tsc --noEmit
+          # Now it will safely use the correct TypeScript compiler
+          npx tsc --noEmit
