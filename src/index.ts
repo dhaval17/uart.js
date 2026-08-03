@@ -16,6 +16,7 @@ export interface UartCandidate {
   parity: 'none' | 'even' | 'mark' | 'odd' | 'space';
   readableRatio: number; // fraction of printable ASCII characters
   lineBreakRatio: number; // fraction of linebreaks in sample
+  entropy: number; // Shannon entropy of the sample (0..8)
   sample: string; // small text sample
   score: number; // final heuristic score
 }
@@ -186,10 +187,25 @@ export class UartListener {
     }
   }
 
+  // --- Analysis helpers ---
+
+  private calculateEntropy(buf: Buffer): number {
+    if (!buf || buf.length === 0) return 0;
+    const counts = new Array<number>(256).fill(0);
+    for (let i = 0; i < buf.length; i++) counts[buf[i]]++;
+    let entropy = 0;
+    for (let i = 0; i < 256; i++) {
+      if (counts[i] === 0) continue;
+      const p = counts[i] / buf.length;
+      entropy -= p * Math.log2(p);
+    }
+    return entropy; // bits per byte (0..8)
+  }
+
   /**
    * Analyse a given UART path by iterating through common baud rates, dataBits, stopBits and parity
    * combinations. For each combination we collect a small sample and compute heuristics such as
-   * readable ASCII ratio and linebreak frequency. Returns a ranked list of candidates and the best match.
+   * readable ASCII ratio, linebreak frequency and entropy. Returns a ranked list of candidates and the best match.
    *
    * This function does not mutate the instance config.path unless you want it to — it accepts a path
    * parameter so it can be run ad-hoc without changing the listener's configuration.
@@ -234,7 +250,7 @@ export class UartListener {
         const onData = (data: Buffer) => {
           collected = Buffer.concat([collected, data]);
           // Keep collected sample reasonably small
-          if (collected.length > 2048) collected = collected.slice(-2048);
+          if (collected.length > 4096) collected = collected.slice(-4096);
         };
 
         const onError = () => {
@@ -247,11 +263,9 @@ export class UartListener {
         const finalize = () => {
           clearTimeout(timeout);
           clearTimeout(sampleTimeout);
-          localPort.removeListener('data', onData);
-          localPort.removeListener('error', onError);
-          if (localPort.isOpen) {
-            localPort.close(() => { /* closed */ });
-          }
+          localPort.removeListener('data', onData as any);
+          localPort.removeListener('error', onError as any);
+          try { if (localPort.isOpen) localPort.close(); } catch (e) {/* ignore */}
 
           const str = collected.toString('utf8');
           const len = str.length;
@@ -265,8 +279,13 @@ export class UartListener {
           const readableRatio = len === 0 ? 0 : printable / len;
           const lineBreakRatio = len === 0 ? 0 : linebreaks / len;
 
+          // Entropy-based binary detection
+          const entropy = this.calculateEntropy(Buffer.from(str, 'utf8'));
+
           // Heuristic score: readableRatio weighted more, but prefer presence of line breaks / structured data
-          const score = readableRatio * 0.7 + Math.min(1, lineBreakRatio * 5) * 0.3;
+          // Also prefer lower entropy for text streams (lower entropy indicates more predictable/ASCII data)
+          const entropyScore = 1 - Math.min(1, entropy / 8); // 1 for entropy 0, 0 for entropy >=8
+          const score = readableRatio * 0.6 + Math.min(1, lineBreakRatio * 5) * 0.25 + entropyScore * 0.15;
 
           resolve({
             baudRate,
@@ -275,13 +294,14 @@ export class UartListener {
             parity,
             readableRatio,
             lineBreakRatio,
-            sample: str.slice(0, 1024),
+            entropy,
+            sample: str.slice(0, 2048),
             score,
-          });
+          } as UartCandidate);
         };
 
-        localPort.on('data', onData);
-        localPort.on('error', onError);
+        localPort.on('data', onData as any);
+        localPort.on('error', onError as any);
 
         localPort.open((err) => {
           if (err) {
@@ -308,7 +328,7 @@ export class UartListener {
               if (result) {
                 candidates.push(result);
                 // If we find a near-perfect read, early exit
-                if (result.readableRatio > 0.98 && result.lineBreakRatio > 0.02) {
+                if (result.readableRatio > 0.98 && result.lineBreakRatio > 0.02 && result.entropy < 5) {
                   // Very likely correct
                   const sorted = candidates.sort((a, b) => b.score - a.score);
                   return { path, candidates: sorted, best: sorted[0], notes: ['Early exit: very high quality match found'] };
@@ -334,4 +354,15 @@ export class UartListener {
 
     return { path, candidates: sorted, best: sorted[0], notes };
   }
+}
+
+/**
+ * Standalone helper that runs analysis without needing to instantiate UartListener manually.
+ */
+export async function analyseUARTStandalone(
+  path: string,
+  options?: { timeoutMs?: number; sampleTimeoutMs?: number }
+): Promise<UartAnalysisResult> {
+  const listener = new UartListener({ path });
+  return listener.analyseUART(path, options);
 }
