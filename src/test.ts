@@ -1,18 +1,63 @@
 // Assuming your class is in index.ts. Adjust the import path if needed.
-import { UartListener } from './index'; 
+import { UartListener, analyseUARTStandalone } from './index'; 
 
-const uart = new UartListener({
-    path: '/dev/pts/2', // Connecting to the first virtual port
-    baudRate: 9600      // Baud rate doesn't strictly matter for virtual ports, but required by serialport
-});
+async function testUART() {
+    const portPath = '/dev/ttyUSB0';
+    console.log(`Starting UART analysis on ${portPath}... This may take a few moments.`);
 
-console.log(`Checking Configured Baud Rate: ${uart.getBaudRate()}`);
+    try {
+        // 1. Run the analysis to find the best configuration
+        const analysis = await analyseUARTStandalone(portPath, {
+            timeoutMs: 1000,
+            sampleTimeoutMs: 600
+        });
 
-uart.startListening(
-    (data) => {
-        console.log(`=> Received data from UART: ${data.trim()}`);
-    },
-    (error) => {
-        console.error(`UART Error:`, error.message);
+        if (!analysis.best) {
+            console.error('\n No readable UART configuration could be detected.');
+            if (analysis.notes) console.log(analysis.notes.join('\n'));
+            return;
+        }
+
+        // 2. Log the discovered configuration
+        console.log('\n Analysis Complete! Best configuration found:');
+        console.log(`   Baud Rate: ${analysis.best.baudRate}`);
+        console.log(`   Data Bits: ${analysis.best.dataBits}`);
+        console.log(`   Stop Bits: ${analysis.best.stopBits}`);
+        console.log(`   Parity:    ${analysis.best.parity}`);
+        console.log(`   Score:     ${analysis.best.score.toFixed(3)}`);
+        
+        if (analysis.notes) {
+            console.log(`   Notes:     ${analysis.notes.join(' | ')}`);
+        }
+
+        // 3. Initialize the listener with the best candidate's settings
+        const uart = new UartListener({
+            path: portPath,
+            baudRate: analysis.best.baudRate,
+            dataBits: analysis.best.dataBits as 8 | 7 | 6 | 5,
+            stopBits: analysis.best.stopBits as 1 | 2,
+            parity: analysis.best.parity
+        });
+
+        console.log(`\nStarting listener on ${portPath} at ${uart.getBaudRate()} baud...`);
+
+        // 4. Start listening to the data stream
+        await uart.startListening(
+            (data) => {
+                // Check if the data is not just empty whitespace before logging
+                if (data.trim()) {
+                    console.log(`[DATA]: ${data.trim()}`);
+                }
+            },
+            (error) => {
+                console.error(`UART Error:`, error.message);
+            }
+        );
+
+    } catch (error) {
+        console.error('An error occurred during UART testing:', error);
     }
-);
+}
+
+// Run the test
+testUART();
