@@ -1,13 +1,13 @@
 // Assuming your class is in index.ts. Adjust the import path if needed.
-import { UartListener, analyseUARTStandalone } from './index'; 
+import { UartListener, analyzeUartStandalone } from './index'; 
 
-async function testUART() {
-    const portPath = '/dev/ttyUSB0';
+async function testUart() {
+    const portPath = '/dev/pts/3';
     console.log(`Starting UART analysis on ${portPath}... This may take a few moments.`);
 
     try {
         // 1. Run the analysis to find the best configuration
-        const analysis = await analyseUARTStandalone(portPath, {
+        const analysis = await analyzeUartStandalone(portPath, {
             timeoutMs: 1000,
             sampleTimeoutMs: 600
         });
@@ -34,8 +34,8 @@ async function testUART() {
         const uart = new UartListener({
             path: portPath,
             baudRate: analysis.best.baudRate,
-            dataBits: analysis.best.dataBits as 8 | 7 | 6 | 5,
-            stopBits: analysis.best.stopBits as 1 | 2,
+            dataBits: analysis.best.dataBits,
+            stopBits: analysis.best.stopBits,
             parity: analysis.best.parity
         });
 
@@ -60,4 +60,4 @@ async function testUART() {
 }
 
 // Run the test
-testUART();
+testUart();

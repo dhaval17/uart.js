@@ -4,15 +4,15 @@ import { SerialPort } from 'serialport';
 export interface UartConfig {
   path: string;       // e.g., '/dev/ttyUSB0' or 'COM3'
   baudRate?: number;  // Optional: if omitted, the script will auto-detect
-  dataBits?: 8 | 7 | 6 | 5;
-  stopBits?: 1 | 2;
+  dataBits?: 5 | 6 | 7 | 8;
+  stopBits?: 1 | 1.5 | 2;
   parity?: 'none' | 'even' | 'mark' | 'odd' | 'space';
 }
 
 export interface UartCandidate {
   baudRate: number;
-  dataBits: number;
-  stopBits: number;
+  dataBits: 5 | 6 | 7 | 8;
+  stopBits: 1 | 1.5 | 2;
   parity: 'none' | 'even' | 'mark' | 'odd' | 'space';
   readableRatio: number; // fraction of printable ASCII characters
   lineBreakRatio: number; // fraction of linebreaks in sample
@@ -109,12 +109,12 @@ export class UartListener {
       }, timeoutMs);
 
       this.port.on('data', (data: Buffer) => {
-        const str = data.toString('utf8');
+        const dataString = data.toString('utf8');
         // Heuristic: Check if data consists of typical printable ASCII characters and whitespace.
         // A mismatched baud rate usually results in random replacement characters () or control chars.
-        const isReadableASCII = /^[\x09\x0A\x0D\x20-\x7E]+$/.test(str);
+        const isReadableASCII = /^[\x09\x0A\x0D\x20-\x7E]+$/.test(dataString);
         
-        if (isReadableASCII && str.trim().length > 0) {
+        if (isReadableASCII && dataString.trim().length > 0) {
           clearTimeout(timeout);
           resolve(true);
         }
@@ -189,14 +189,14 @@ export class UartListener {
 
   // --- Analysis helpers ---
 
-  private calculateEntropy(buf: Buffer): number {
-    if (!buf || buf.length === 0) return 0;
+  private calculateEntropy(buffer: Buffer): number {
+    if (!buffer || buffer.length === 0) return 0;
     const counts = new Array<number>(256).fill(0);
-    for (let i = 0; i < buf.length; i++) counts[buf[i]]++;
+    for (let i = 0; i < buffer.length; i++) counts[buffer[i]]++;
     let entropy = 0;
     for (let i = 0; i < 256; i++) {
       if (counts[i] === 0) continue;
-      const p = counts[i] / buf.length;
+      const p = counts[i] / buffer.length;
       entropy -= p * Math.log2(p);
     }
     return entropy; // bits per byte (0..8)
@@ -210,7 +210,7 @@ export class UartListener {
    * This function does not mutate the instance config.path unless you want it to — it accepts a path
    * parameter so it can be run ad-hoc without changing the listener's configuration.
    */
-  public async analyseUART(
+  public async analyzeUart(
     path: string,
     options?: { timeoutMs?: number; sampleTimeoutMs?: number }
   ): Promise<UartAnalysisResult> {
@@ -225,7 +225,12 @@ export class UartListener {
     const candidates: UartCandidate[] = [];
 
     // Helper to open port for a specific combination and read a sample
-    const testCombination = (baudRate: number, dataBits: number, stopBits: number, parity: UartCandidate['parity']): Promise<UartCandidate | null> => {
+    const testCombination = (
+      baudRate: number,
+      dataBits: 5 | 6 | 7 | 8,
+      stopBits: 1 | 1.5 | 2,
+      parity: UartCandidate['parity']
+    ): Promise<UartCandidate | null> => {
       return new Promise((resolve) => {
         const localPort = new SerialPort({
           path,
@@ -263,24 +268,24 @@ export class UartListener {
         const finalize = () => {
           clearTimeout(timeout);
           clearTimeout(sampleTimeout);
-          localPort.removeListener('data', onData as any);
-          localPort.removeListener('error', onError as any);
+          localPort.removeListener('data', onData);
+          localPort.removeListener('error', onError);
           try { if (localPort.isOpen) localPort.close(); } catch (e) {/* ignore */}
 
-          const str = collected.toString('utf8');
-          const len = str.length;
-          let printable = 0;
-          let linebreaks = 0;
-          for (let i = 0; i < len; i++) {
-            const code = str.charCodeAt(i);
-            if (code === 10 || code === 13) linebreaks++;
-            if ((code >= 0x20 && code <= 0x7E) || code === 9 || code === 10 || code === 13) printable++;
+          const dataString = collected.toString('utf8');
+          const length = dataString.length;
+          let printableCount = 0;
+          let linebreakCount = 0;
+          for (let i = 0; i < length; i++) {
+            const code = dataString.charCodeAt(i);
+            if (code === 10 || code === 13) linebreakCount++;
+            if ((code >= 0x20 && code <= 0x7E) || code === 9 || code === 10 || code === 13) printableCount++;
           }
-          const readableRatio = len === 0 ? 0 : printable / len;
-          const lineBreakRatio = len === 0 ? 0 : linebreaks / len;
+          const readableRatio = length === 0 ? 0 : printableCount / length;
+          const lineBreakRatio = length === 0 ? 0 : linebreakCount / length;
 
           // Entropy-based binary detection
-          const entropy = this.calculateEntropy(Buffer.from(str, 'utf8'));
+          const entropy = this.calculateEntropy(Buffer.from(dataString, 'utf8'));
 
           // Heuristic score: readableRatio weighted more, but prefer presence of line breaks / structured data
           // Also prefer lower entropy for text streams (lower entropy indicates more predictable/ASCII data)
@@ -295,13 +300,13 @@ export class UartListener {
             readableRatio,
             lineBreakRatio,
             entropy,
-            sample: str.slice(0, 2048),
+            sample: dataString.slice(0, 2048),
             score,
           } as UartCandidate);
         };
 
-        localPort.on('data', onData as any);
-        localPort.on('error', onError as any);
+        localPort.on('data', onData);
+        localPort.on('error', onError);
 
         localPort.open((err) => {
           if (err) {
@@ -359,10 +364,10 @@ export class UartListener {
 /**
  * Standalone helper that runs analysis without needing to instantiate UartListener manually.
  */
-export async function analyseUARTStandalone(
+export async function analyzeUartStandalone(
   path: string,
   options?: { timeoutMs?: number; sampleTimeoutMs?: number }
 ): Promise<UartAnalysisResult> {
   const listener = new UartListener({ path });
-  return listener.analyseUART(path, options);
+  return listener.analyzeUart(path, options);
 }
