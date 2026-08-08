@@ -1,12 +1,15 @@
 {
   "name": "@dhaval/uart.js",
   "version": "1.0.1",
-  "description": "A robust, TypeScript-based UART listener module for Node.js",
+  "description": "A robust, event-driven TypeScript UART module for Node.js to read, analyze, and write serial data",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc",
-    "prepublishOnly": "npm run build"
+    "test": "npm run build && tsx --test test/unit/*.test.ts",
+    "test:unit": "tsx --test test/unit/*.test.ts",
+    "example": "tsx test/integration/example.ts",
+    "prepublishOnly": "npm run build && npm test"
   },
   "files": [
     "dist"

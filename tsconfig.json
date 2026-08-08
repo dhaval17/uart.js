@@ -1,13 +1,21 @@
 {
   "compilerOptions": {
-    "target": "es2016", 
+    "target": "es2020",
     "module": "commonjs",
-    "rootDir": "./src",        // Tells the compiler where your TS files are
-    "outDir": "./dist",        // Where to put the compiled JS files
-    "declaration": true,       // Generates .d.ts files for users who use TypeScript
+    "rootDir": "./src",
+    "outDir": "./dist",
+    "declaration": true,
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true
-  }
+  },
+  "include": [
+    "src/**/*"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "test"
+  ]
 }
