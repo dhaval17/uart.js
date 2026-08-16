@@ -1,99 +1,192 @@
+/**
+ * @file types.ts
+ * @description Type definitions and interfaces for @dhaval/uart.js library.
+ * 
+ * Provides strong TypeScript typings for UART port configuration, read/write options,
+ * auto-detection parameters, candidate scoring metrics, and hardware port information.
+ */
+
+/** Valid data bit widths supported by UART controllers (5, 6, 7, or 8 bits per frame). */
 export type DataBits = 5 | 6 | 7 | 8;
+
+/** Valid stop bit configurations (1, 1.5, or 2 bits per frame). */
 export type StopBits = 1 | 1.5 | 2;
+
+/** Parity bit verification modes ('none', 'even', 'odd', 'mark', or 'space'). */
 export type Parity = 'none' | 'even' | 'odd' | 'mark' | 'space';
 
+/**
+ * Configuration options required to instantiate a `UartPort`.
+ */
 export interface UartConfig {
-  /** Serial device path (e.g. '/dev/ttyUSB0', '/dev/ttyACM0', 'COM3') */
+  /** Serial device path (e.g. '/dev/ttyUSB0', '/dev/ttyACM0', 'COM3', '/dev/pts/2'). */
   path: string;
-  /** Baud rate (e.g., 9600, 115200). Defaults to 115200 if not specified. */
+
+  /** Communication speed in symbols/bits per second (e.g., 9600, 115200). Defaults to 115200. */
   baudRate?: number;
-  /** Number of data bits per frame. Defaults to 8. */
+
+  /** Number of data payload bits in each frame. Defaults to 8. */
   dataBits?: DataBits;
-  /** Number of stop bits per frame. Defaults to 1. */
+
+  /** Number of stop bits signalling frame completion. Defaults to 1. */
   stopBits?: StopBits;
-  /** Parity bit mode. Defaults to 'none'. */
+
+  /** Parity checking mode for error detection. Defaults to 'none'. */
   parity?: Parity;
-  /** Whether to automatically open the port upon creation. Defaults to false. */
+
+  /** Whether to automatically open the physical serial connection upon class construction. Defaults to false. */
   autoOpen?: boolean;
-  /** Hardware flow control (RTS/CTS). Defaults to false. */
+
+  /** Enable Hardware flow control via RTS (Request to Send) / CTS (Clear to Send) signals. Defaults to false. */
   rtscts?: boolean;
-  /** Software flow control (XON). Defaults to false. */
+
+  /** Enable Software flow control via XON character transmission. Defaults to false. */
   xon?: boolean;
-  /** Software flow control (XOFF). Defaults to false. */
+
+  /** Enable Software flow control via XOFF character transmission. Defaults to false. */
   xoff?: boolean;
-  /** Software flow control (XANY). Defaults to false. */
+
+  /** Enable Software flow control continuation via XANY character. Defaults to false. */
   xany?: boolean;
-  /** Hangup on close. Defaults to true. */
+
+  /** Hangup (close DTR signal) when closing the serial port device file. Defaults to true. */
   hupcl?: boolean;
-  /** Custom serial port binding (useful for unit testing with @serialport/binding-mock). */
+
+  /** Custom underlying binding backend (useful for testing with `@serialport/binding-mock`). */
   binding?: any;
 }
 
+/**
+ * Options for configuring asynchronous write operations on `UartPort`.
+ */
 export interface WriteOptions {
-  /** String encoding when writing string data. Defaults to 'utf8'. */
+  /** Text encoding format when writing string data. Defaults to 'utf8'. */
   encoding?: BufferEncoding;
-  /** Whether to wait for OS write buffer to drain before resolving. Defaults to true. */
+
+  /** 
+   * Whether to wait until all buffered bytes are physically transmitted 
+   * to the underlying hardware device before resolving the Promise. Defaults to true.
+   */
   drain?: boolean;
-  /** Maximum time in milliseconds to wait for write/drain completion. */
+
+  /** Maximum time in milliseconds to wait for write and drain operations to complete before throwing a timeout error. */
   timeoutMs?: number;
 }
 
+/**
+ * Options for configuring asynchronous single-read operations on `UartPort`.
+ */
 export interface ReadOptions {
-  /** Maximum time in milliseconds to wait for incoming data. */
+  /** Maximum duration in milliseconds to wait for data arrival before throwing a timeout error. Defaults to 5000ms. */
   timeoutMs?: number;
-  /** Character encoding to return as string. If omitted, returns Buffer. */
+
+  /** Character encoding format. If specified, `read()` returns a string; if omitted, returns a raw Buffer. */
   encoding?: BufferEncoding;
 }
 
+/**
+ * Evaluated UART configuration candidate generated during auto-detection analysis (`analyzeUart`).
+ */
 export interface UartCandidate {
+  /** Baud rate speed tested for this candidate (e.g. 115200). */
   baudRate: number;
+
+  /** Data bits tested for this candidate (e.g. 8). */
   dataBits: DataBits;
+
+  /** Stop bits tested for this candidate (e.g. 1). */
   stopBits: StopBits;
+
+  /** Parity mode tested for this candidate (e.g. 'none'). */
   parity: Parity;
-  /** Fraction of printable ASCII characters in sample (0.0 to 1.0) */
+
+  /** Proportion of printable ASCII characters detected in the sample (value ranges from 0.0 to 1.0). */
   readableRatio: number;
-  /** Fraction of line breaks (\r, \n) in sample (0.0 to 1.0) */
+
+  /** Proportion of line breaks (\r, \n) detected in the sample (value ranges from 0.0 to 1.0). */
   lineBreakRatio: number;
-  /** Shannon entropy of sampled bytes (bits per byte, 0.0 to 8.0) */
+
+  /** Shannon entropy measurement of the sampled payload (bits per byte, ranges from 0.0 to 8.0). */
   entropy: number;
-  /** Overall heuristic score (higher means higher probability of being correct parameters) */
+
+  /** 
+   * Overall calculated probability score (0.0 to 1.0).
+   * Weighted combination of readable ASCII (60%), line breaks (25%), and low entropy (15%).
+   */
   score: number;
-  /** First 2048 characters of the captured sample */
+
+  /** Preview snippet of up to the first 2048 characters decoded during sampling. */
   sample: string;
 }
 
+/**
+ * Options to customize the auto-detection sweep performed by `UartAnalyzer`.
+ */
 export interface AnalysisOptions {
-  /** List of baud rates to test. Defaults to common baud rates. */
+  /** List of baud rates to test sequentially. Defaults to `COMMON_BAUD_RATES`. */
   baudRates?: number[];
-  /** Data bits to test. Defaults to [8, 7]. */
+
+  /** List of data bit sizes to test. Defaults to `[8, 7]`. */
   dataBitsList?: DataBits[];
-  /** Stop bits to test. Defaults to [1, 2]. */
+
+  /** List of stop bit lengths to test. Defaults to `[1, 2]`. */
   stopBitsList?: StopBits[];
-  /** Parities to test. Defaults to ['none', 'even', 'odd']. */
+
+  /** List of parity modes to test. Defaults to `['none', 'even', 'odd']`. */
   parityList?: Parity[];
-  /** Timeout in ms per individual parameter combination test. Defaults to 1000ms. */
+
+  /** Total timeout allowance per parameter test in milliseconds. Defaults to 1000ms. */
   testTimeoutMs?: number;
-  /** Duration in ms to accumulate sample data per test. Defaults to 600ms. */
+
+  /** Window duration in milliseconds to accumulate incoming serial data per test iteration. Defaults to 600ms. */
   sampleTimeoutMs?: number;
-  /** Minimum score threshold (0.0 - 1.0) for early exit when a strong candidate is found. Defaults to 0.85. */
+
+  /** Score threshold (0.0 to 1.0). If a candidate exceeds this score, analysis halts immediately. Defaults to 0.85. */
   earlyExitScore?: number;
-  /** Custom serial port binding (useful for unit testing with @serialport/binding-mock). */
+
+  /** Custom underlying binding backend (useful for testing with `@serialport/binding-mock`). */
   binding?: any;
 }
 
+/**
+ * Detailed output produced after completing UART configuration auto-detection.
+ */
 export interface UartAnalysisResult {
+  /** Device file path of analyzed serial port. */
   path: string;
+
+  /** All successfully tested candidate configurations, sorted in descending order by score. */
   candidates: UartCandidate[];
+
+  /** The top-ranked candidate configuration, or `undefined` if no readable data was detected. */
   best?: UartCandidate;
+
+  /** Log messages and notes detailing the progression of the analysis sweep. */
   notes: string[];
 }
 
+/**
+ * Information structure representing a physical or virtual serial port attached to the host system.
+ */
 export interface PortInfo {
+  /** System path identifying the port (e.g. '/dev/ttyUSB0', 'COM1', '/dev/pts/2'). */
   path: string;
+
+  /** Name of the device manufacturer (if reported by OS/driver). */
   manufacturer?: string;
+
+  /** Hardware serial number string. */
   serialNumber?: string;
+
+  /** Plug-and-Play (PnP) subsystem identifier. */
   pnpId?: string;
+
+  /** Physical USB topology location ID. */
   locationId?: string;
+
+  /** USB Vendor Identifier (VID) hex string. */
   vendorId?: string;
+
+  /** USB Product Identifier (PID) hex string. */
   productId?: string;
 }
