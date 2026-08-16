@@ -38,7 +38,7 @@ for (const port of ports) {
 }
 ```
 
-### 2. Auto-Detect UART Parameters
+### 2. Auto-Detect UART Parameters with Live Progress Bar
 
 ```typescript
 import { analyzeUart } from '@dhaval/uart.js';
@@ -46,6 +46,11 @@ import { analyzeUart } from '@dhaval/uart.js';
 const result = await analyzeUart('/dev/ttyUSB0', {
   testTimeoutMs: 1000,
   sampleTimeoutMs: 600,
+  showProgressBar: true, // Display live ASCII progress bar in terminal
+  onProgress: (progress) => {
+    // Optional callback for custom UIs/loggers
+    console.log(`Progress: ${progress.percentage.toFixed(1)}% (${progress.current}/${progress.total})`);
+  },
 });
 
 if (result.best) {

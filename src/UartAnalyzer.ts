@@ -10,6 +10,7 @@
 import { SerialPort } from 'serialport';
 import {
   AnalysisOptions,
+  AnalysisProgress,
   DataBits,
   Parity,
   StopBits,
@@ -26,6 +27,51 @@ import { calculateAsciiStats, calculateEntropy, COMMON_BAUD_RATES } from './util
  */
 export class UartAnalyzer {
   /**
+   * Formats an `AnalysisProgress` object into a visual progress bar string.
+   * 
+   * @param progress - Current analysis progress details.
+   * @param width - Width of the progress bar in characters (default: 30).
+   * @returns Formatted progress bar string (e.g. "[██████░░░░] 60.0% (6/10) | Testing: 115200 8N1").
+   */
+  public formatProgressBar(progress: AnalysisProgress, width = 30): string {
+    const { current, total, percentage, currentConfig, bestCandidate } = progress;
+    const safeTotal = Math.max(1, total);
+    const filledLength = Math.min(width, Math.round((Math.min(current, safeTotal) / safeTotal) * width));
+    const emptyLength = Math.max(0, width - filledLength);
+    const filledBar = '█'.repeat(filledLength);
+    const emptyBar = '░'.repeat(emptyLength);
+
+    const parityShort = (currentConfig.parity ?? 'none')[0].toUpperCase();
+    const configStr = `${currentConfig.baudRate} ${currentConfig.dataBits}${parityShort}${currentConfig.stopBits}`;
+
+    let bestStr = '';
+    if (bestCandidate) {
+      const bestParityShort = bestCandidate.parity[0].toUpperCase();
+      bestStr = ` | Best: ${bestCandidate.baudRate} ${bestCandidate.dataBits}${bestParityShort}${bestCandidate.stopBits} (${bestCandidate.score.toFixed(2)})`;
+    }
+
+    return `[${filledBar}${emptyBar}] ${percentage.toFixed(1)}% (${current}/${total}) | Testing: ${configStr}${bestStr}`;
+  }
+
+  /**
+   * Renders the progress bar to the specified output stream using ANSI line clearing.
+   * 
+   * @param progress - Progress information to render.
+   * @param stream - Output stream (default: `process.stdout`).
+   * @param isFinal - Whether this is the final progress update (appends a newline if true).
+   * @param width - Width of the progress bar in characters.
+   */
+  private renderProgressBar(
+    progress: AnalysisProgress,
+    stream: NodeJS.WritableStream = process.stdout,
+    isFinal = false,
+    width = 30
+  ): void {
+    const barText = this.formatProgressBar(progress, width);
+    stream.write(`\r${barText}\x1b[K${isFinal ? '\n' : ''}`);
+  }
+
+  /**
    * Analyzes a target serial device path by performing a parameter sweep.
    * 
    * Iterates through combinations of baud rate, data bits, stop bits, and parity.
@@ -35,13 +81,13 @@ export class UartAnalyzer {
    * - **Low Shannon Entropy (15%)**: Distinguishes structured text from random garbage or framing errors.
    * 
    * @param path - Serial device path (e.g. '/dev/ttyUSB0', 'COM4').
-   * @param options - Analysis parameters (baud rate lists, test durations, early exit threshold).
+   * @param options - Analysis parameters (baud rate lists, test durations, early exit threshold, progress options).
    * @returns Promise resolving to `UartAnalysisResult` containing ranked candidates and top match.
    * 
    * @example
    * ```typescript
    * const analyzer = new UartAnalyzer();
-   * const result = await analyzer.analyze('/dev/ttyUSB0', { testTimeoutMs: 800 });
+   * const result = await analyzer.analyze('/dev/ttyUSB0', { testTimeoutMs: 800, showProgressBar: true });
    * console.log('Best match:', result.best);
    * ```
    */
@@ -59,14 +105,64 @@ export class UartAnalyzer {
     const sampleTimeoutMs = options?.sampleTimeoutMs ?? 600;
     const earlyExitScore = options?.earlyExitScore ?? 0.85;
 
+    const showProgressBar = options?.showProgressBar ?? false;
+    const progressStream = options?.progressStream ?? process.stdout;
+
+    const totalCombinations =
+      baudRates.length * dataBitsList.length * stopBitsList.length * parityList.length;
+
+    let currentStep = 0;
+    let bestCandidate: UartCandidate | undefined;
     const candidates: UartCandidate[] = [];
     const notes: string[] = [];
+
+    const updateProgress = (
+      config: { baudRate: number; dataBits: DataBits; stopBits: StopBits; parity: Parity },
+      isFinal = false
+    ) => {
+      const percentage = totalCombinations > 0
+        ? isFinal
+          ? 100
+          : (currentStep / totalCombinations) * 100
+        : 100;
+
+      const progress: AnalysisProgress = {
+        current: currentStep,
+        total: totalCombinations,
+        percentage,
+        currentConfig: config,
+        bestCandidate,
+      };
+
+      if (options?.onProgress) {
+        try {
+          options.onProgress(progress);
+        } catch {
+          // Ignore callback error
+        }
+      }
+
+      if (showProgressBar) {
+        this.renderProgressBar(progress, progressStream, isFinal);
+      }
+    };
+
+    if (totalCombinations === 0) {
+      notes.push('No parameter combinations configured for analysis.');
+      updateProgress({ baudRate: 0, dataBits: 8, stopBits: 1, parity: 'none' }, true);
+      return { path, candidates: [], notes };
+    }
 
     // Begin nested parameter sweep loops
     for (const baudRate of baudRates) {
       for (const dataBits of dataBitsList) {
         for (const stopBits of stopBitsList) {
           for (const parity of parityList) {
+            currentStep++;
+            const currentConfig = { baudRate, dataBits, stopBits, parity };
+
+            updateProgress(currentConfig, false);
+
             try {
               // Test individual configuration combination
               const candidate = await this.testCombination({
@@ -83,6 +179,9 @@ export class UartAnalyzer {
               // If candidate produced readable data (score > 0), record it
               if (candidate && candidate.score > 0) {
                 candidates.push(candidate);
+                if (!bestCandidate || candidate.score > bestCandidate.score) {
+                  bestCandidate = candidate;
+                }
 
                 // Check if score satisfies early exit criteria (avoids scanning remaining slow rates)
                 if (candidate.score >= earlyExitScore) {
@@ -90,6 +189,7 @@ export class UartAnalyzer {
                   notes.push(
                     `Early exit triggered: found strong candidate (${candidate.baudRate} baud, ${candidate.dataBits}N${candidate.stopBits}, parity: ${candidate.parity}) with score ${candidate.score.toFixed(2)}.`
                   );
+                  updateProgress(currentConfig, true);
                   return {
                     path,
                     candidates: sorted,
@@ -117,6 +217,14 @@ export class UartAnalyzer {
         `Top candidate: ${top.baudRate} baud, ${top.dataBits} dataBits, ${top.stopBits} stopBits, ${top.parity} parity (Score: ${top.score.toFixed(2)})`
       );
     }
+
+    const lastConfig = {
+      baudRate: baudRates[baudRates.length - 1],
+      dataBits: dataBitsList[dataBitsList.length - 1],
+      stopBits: stopBitsList[stopBitsList.length - 1],
+      parity: parityList[parityList.length - 1],
+    };
+    updateProgress(lastConfig, true);
 
     return {
       path,

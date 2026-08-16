@@ -22,6 +22,7 @@ async function main() {
     const analysis = await analyzeUart(targetPath, {
       testTimeoutMs: 500,
       sampleTimeoutMs: 300,
+      showProgressBar: true,
     });
 
     console.log('   Analysis notes:', analysis.notes);

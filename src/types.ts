@@ -120,6 +120,31 @@ export interface UartCandidate {
 }
 
 /**
+ * Information describing current progress of a UART analysis parameter sweep.
+ */
+export interface AnalysisProgress {
+  /** Current step index (1-based). */
+  current: number;
+
+  /** Total number of parameter combinations to be tested. */
+  total: number;
+
+  /** Calculated percentage of completed sweep iterations (0.0 to 100.0). */
+  percentage: number;
+
+  /** Configuration parameters currently being evaluated. */
+  currentConfig: {
+    baudRate: number;
+    dataBits: DataBits;
+    stopBits: StopBits;
+    parity: Parity;
+  };
+
+  /** The top candidate configuration found so far, if any. */
+  bestCandidate?: UartCandidate;
+}
+
+/**
  * Options to customize the auto-detection sweep performed by `UartAnalyzer`.
  */
 export interface AnalysisOptions {
@@ -146,6 +171,15 @@ export interface AnalysisOptions {
 
   /** Custom underlying binding backend (useful for testing with `@serialport/binding-mock`). */
   binding?: any;
+
+  /** Whether to render a live visual progress bar to stdout/stderr during analysis. Defaults to false. */
+  showProgressBar?: boolean;
+
+  /** Custom writable stream for progress bar output. Defaults to `process.stdout`. */
+  progressStream?: NodeJS.WritableStream;
+
+  /** Callback function invoked at each step of the analysis sweep with progress updates. */
+  onProgress?: (progress: AnalysisProgress) => void;
 }
 
 /**
