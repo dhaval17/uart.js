@@ -1,0 +1,17 @@
+{
+  "name": "testuartapp",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "responder": "node responder.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@dhaval/uart.js": "^1.1.0"
+  }
+}

@@ -55,6 +55,8 @@ if (result.best) {
 
 ### 3. Read and Write Serial Data (`UartPort`)
 
+#### Option A: Command/Response Pattern (with Timeout Handling)
+
 ```typescript
 import { UartPort } from '@dhaval/uart.js';
 
@@ -66,26 +68,61 @@ const uart = new UartPort({
   parity: 'none',
 });
 
-// Event-driven listening for complete lines
+uart.on('error', (err) => {
+  console.error('UART Error:', err.message);
+});
+
+// Open port & send command
+await uart.open();
+await uart.write('AT+GMR\r\n');
+
+// Read single response line with timeout safety
+try {
+  // readLine(delimiter, timeoutMs) throws if no line arrives within timeoutMs
+  const response = await uart.readLine('\n', 3000);
+  console.log('Response:', response);
+} catch (err) {
+  if (err.message.includes('timed out')) {
+    console.warn('No response received within timeout window.');
+  } else {
+    console.error('Read error:', err.message);
+  }
+}
+
+// Close connection cleanly when done
+await uart.close();
+```
+
+#### Option B: Continuous Data Stream Pattern
+
+```typescript
+import { UartPort } from '@dhaval/uart.js';
+
+const uart = new UartPort({
+  path: '/dev/ttyUSB0',
+  baudRate: 115200,
+});
+
+// Continuously process incoming lines as a data stream
 uart.on('line', (line) => {
-  console.log('Received line:', line);
+  console.log('Streamed line:', line);
 });
 
 uart.on('error', (err) => {
   console.error('UART Error:', err.message);
 });
 
-// Open port & write data
 await uart.open();
-await uart.write('AT+GMR\r\n');
+console.log('Listening for UART data stream...');
 
-// Read a single line asynchronously with a timeout
-const response = await uart.readLine('\n', 3000);
-console.log('Response:', response);
-
-// Close connection cleanly when done
-await uart.close();
+// Cleanly close port on process termination (Ctrl+C)
+process.on('SIGINT', async () => {
+  await uart.close();
+  process.exit(0);
+});
 ```
+
+> **Testing Note for Virtual Ports (`socat` / `/dev/pts`)**: When testing with paired pseudo-terminals (e.g. `/dev/pts/2` <-> `/dev/pts/3`), ensure an active responder or simulator process is running on the opposite end (`/dev/pts/3`) to reply or stream data back.
 
 ---
 
