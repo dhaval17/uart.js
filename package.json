@@ -1,6 +1,6 @@
 {
   "name": "@dhaval/uart.js",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "A robust, event-driven TypeScript UART module for Node.js to read, analyze, and write serial data",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
