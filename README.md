@@ -126,7 +126,7 @@ process.on('SIGINT', async () => {
 
 ---
 
-## Running Tests
+## Running Tests & Interactive Demo
 
 The workspace includes unit tests using Node's native test runner and `@serialport/binding-mock`:
 
@@ -137,6 +137,8 @@ npm test
 # Run interactive integration example
 npm run example
 ```
+
+For testing with virtual serial ports (`socat`), see the dedicated guide in [`testUartapp/README.md`](./testUartapp/README.md).
 
 ---
 
